@@ -168,6 +168,61 @@ function Get-ReportTimestamp {
     }
 }
 
+function Convert-PSObjectToHashtable {
+    param([Parameter(ValueFromPipeline = $true)]$InputObject)
+    
+    if ($InputObject -is [System.Management.Automation.PSCustomObject]) {
+        $hash = @{}
+        foreach ($prop in $InputObject.psobject.Properties) {
+            $hash[$prop.Name] = Convert-PSObjectToHashtable $prop.Value
+        }
+        return $hash
+    }
+    elseif ($InputObject -is [object[]]) {
+        $arr = @()
+        foreach ($item in $InputObject) {
+            $arr += Convert-PSObjectToHashtable $item
+        }
+        return $arr
+    }
+    else {
+        return $InputObject
+    }
+}
+
+function Get-Resistances {
+    if (Test-Path $script:resistancePath) {
+        try {
+            $json = Get-Content $script:resistancePath -Raw -ErrorAction SilentlyContinue
+            if ($json) {
+                # Version modernisée (-AsHashtable existe)
+                if ($PSVersionTable.PSVersion.Major -ge 6) {
+                    return $json | ConvertFrom-Json -AsHashtable
+                }
+                else {
+                    # Version compatible PowerShell 5.1
+                    $obj = $json | ConvertFrom-Json
+                    if ($obj) {
+                        return Convert-PSObjectToHashtable $obj
+                    }
+                }
+            }
+        }
+        catch {}
+    }
+    return @{}
+}
+
+function Save-Resistances {
+    param($Dict)
+    try {
+        $Dict | ConvertTo-Json -Depth 10 | Set-Content $script:resistancePath -Force
+    }
+    catch {
+        [System.Windows.Forms.MessageBox]::Show("Erreur lors de la sauvegarde des résistances : $_")
+    }
+}
+
 function Get-FileText {
     param([string]$Path)
     $encodings = @([System.Text.Encoding]::UTF8,
@@ -271,6 +326,8 @@ $script:limitHigh = 0.22
 $script:limitLow = -0.22
 $script:reportCache = @()
 $script:reportColors = @{}
+$script:resistancePath = Join-Path $PSScriptRoot "resistances.json"
+$script:resistanceDict = Get-Resistances
 
 # Liste fixe des 15 positions pour l'axe X
 $script:StandardPositions = @(
@@ -499,12 +556,12 @@ $colDate.HeaderText = "Date"
 $colDate.FillWeight = 30
 $dgvReports.Columns.Add($colDate) | Out-Null
 
-$colMax = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
-$colMax.Name = "MaxErr"
-$colMax.HeaderText = "Écart Max"
-$colMax.FillWeight = 20
-$colMax.DefaultCellStyle.Alignment = 'MiddleRight'
-$dgvReports.Columns.Add($colMax) | Out-Null
+$colRes = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+$colRes.Name = "Resistances"
+$colRes.HeaderText = "Résistances (U,V,W)"
+$colRes.FillWeight = 30
+$colRes.DefaultCellStyle.Alignment = 'MiddleLeft'
+$dgvReports.Columns.Add($colRes) | Out-Null
 
 $pnlGrid = New-Object System.Windows.Forms.Panel
 $pnlGrid.Dock = 'Fill'
@@ -806,6 +863,85 @@ $UpdateSeriesButtons = {
     }
 }
 
+function Show-ResistanceDialog {
+    param([string]$ReportName, $CurrentValues)
+    $diag = New-Object System.Windows.Forms.Form
+    $diag.Text = "Saisie des résistances - $ReportName"
+    $diag.Size = New-Object System.Drawing.Size(300, 240)
+    $diag.StartPosition = 'CenterParent'
+    $diag.FormBorderStyle = 'FixedDialog'
+    $diag.MaximizeBox = $false
+    $diag.MinimizeBox = $false
+    $diag.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+
+    $lblInfo = New-Object System.Windows.Forms.Label
+    $lblInfo.Text = "Valeurs de résistance (Ohms) :"
+    $lblInfo.Location = New-Object System.Drawing.Point(20, 10)
+    $lblInfo.Size = New-Object System.Drawing.Size(250, 20)
+    $diag.Controls.Add($lblInfo)
+
+    $normValues = @(221, 274, 332, 383, 432, 475, 536, 576, 634, 681, 845, 931, 1000)
+
+    # U
+    $lblU = New-Object System.Windows.Forms.Label
+    $lblU.Text = "Voie U :"
+    $lblU.Location = New-Object System.Drawing.Point(30, 45)
+    $lblU.AutoSize = $true
+    $diag.Controls.Add($lblU)
+    $cbU = New-Object System.Windows.Forms.ComboBox
+    $cbU.Location = New-Object System.Drawing.Point(100, 42)
+    $cbU.DropDownStyle = 'DropDownList'
+    $cbU.Items.AddRange($normValues)
+    if ($CurrentValues.U -in $normValues) { $cbU.SelectedItem = [int]$CurrentValues.U }
+    $diag.Controls.Add($cbU)
+
+    # V
+    $lblV = New-Object System.Windows.Forms.Label
+    $lblV.Text = "Voie V :"
+    $lblV.Location = New-Object System.Drawing.Point(30, 80)
+    $lblV.AutoSize = $true
+    $diag.Controls.Add($lblV)
+    $cbV = New-Object System.Windows.Forms.ComboBox
+    $cbV.Location = New-Object System.Drawing.Point(100, 77)
+    $cbV.DropDownStyle = 'DropDownList'
+    $cbV.Items.AddRange($normValues)
+    if ($CurrentValues.V -in $normValues) { $cbV.SelectedItem = [int]$CurrentValues.V }
+    $diag.Controls.Add($cbV)
+
+    # W
+    $lblW = New-Object System.Windows.Forms.Label
+    $lblW.Text = "Voie W :"
+    $lblW.Location = New-Object System.Drawing.Point(30, 115)
+    $lblW.AutoSize = $true
+    $diag.Controls.Add($lblW)
+    $cbW = New-Object System.Windows.Forms.ComboBox
+    $cbW.Location = New-Object System.Drawing.Point(100, 112)
+    $cbW.DropDownStyle = 'DropDownList'
+    $cbW.Items.AddRange($normValues)
+    if ($CurrentValues.W -in $normValues) { $cbW.SelectedItem = [int]$CurrentValues.W }
+    $diag.Controls.Add($cbW)
+
+    $btnOk = New-Object System.Windows.Forms.Button
+    $btnOk.Text = "Valider"
+    $btnOk.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $btnOk.Location = New-Object System.Drawing.Point(50, 160)
+    $diag.Controls.Add($btnOk)
+
+    $btnCancel = New-Object System.Windows.Forms.Button
+    $btnCancel.Text = "Annuler"
+    $btnCancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $btnCancel.Location = New-Object System.Drawing.Point(150, 160)
+    $diag.Controls.Add($btnCancel)
+
+    $diag.AcceptButton = $btnOk
+    $diag.CancelButton = $btnCancel
+
+    if ($diag.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        return @{ U = $cbU.SelectedItem; V = $cbV.SelectedItem; W = $cbW.SelectedItem }
+    }
+    return $null
+}
+
 $LoadAction = {
     $path = $txtFolder.Text
     if (-not (Test-Path $path)) { return }
@@ -845,7 +981,16 @@ $LoadAction = {
         $row = $dgvReports.Rows[$idx]
         $row.Cells["Rapport"].Value = $r.Name
         $row.Cells["Date"].Value = if ($r.Timestamp) { $r.Timestamp.ToString("dd/MM/yyyy HH:mm") } else { "-" }
-        $row.Cells["MaxErr"].Value = "$($r.MaxAbsError)%"
+        
+        # Afficher les résistances si elles existent
+        $res = $script:resistanceDict[$r.Name]
+        if ($res) {
+            $row.Cells["Resistances"].Value = "U:$($res.U) V:$($res.V) W:$($res.W)"
+        }
+        else {
+            $row.Cells["Resistances"].Value = "Cliq. pour saisir..."
+        }
+        
         $row.Cells["Status"].Value = if ($r.IsOk) { $bmpOK } else { $bmpNOK }
         
         if (-not $r.IsOk) { $row.DefaultCellStyle.ForeColor = 'DarkRed' }
@@ -943,6 +1088,25 @@ $btnNext.Add_Click({
         }
         catch {
             [System.Windows.Forms.MessageBox]::Show("Erreur lors de la recherche du dossier suivant : $_", "Erreur", 'OK', 'Error')
+        }
+    })
+
+$dgvReports.Add_CellClick({
+        param($s, $e)
+        if ($e.RowIndex -ge 0 -and $dgvReports.Columns[$e.ColumnIndex].Name -eq "Resistances") {
+            $row = $dgvReports.Rows[$e.RowIndex]
+            $rName = $row.Cells["Rapport"].Value
+            $current = $script:resistanceDict[$rName]
+            if (-not $current) { $current = @{ U = ""; V = ""; W = "" } }
+            
+            $newVals = Show-ResistanceDialog -ReportName $rName -CurrentValues $current
+            if ($newVals) {
+                # Mettre à jour le dictionnaire et sauvegarder
+                $script:resistanceDict[$rName] = $newVals
+                Save-Resistances -Dict $script:resistanceDict
+                # Mettre à jour la cellule immédiatement
+                $row.Cells["Resistances"].Value = "U:$($newVals.U) V:$($newVals.V) W:$($newVals.W)"
+            }
         }
     })
 
