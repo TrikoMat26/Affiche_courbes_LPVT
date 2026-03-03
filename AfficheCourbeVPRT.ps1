@@ -771,8 +771,14 @@ $UpdateCharts = {
             $sH = New-Object System.Windows.Forms.DataVisualization.Charting.Series "L+"; $sH.ChartType = 'Line'; $sH.Color = 'Red'; $sH.BorderDashStyle = 'Dash'; $sH.IsVisibleInLegend = $false; $chart.Series.Add($sH) | Out-Null
             $sL = New-Object System.Windows.Forms.DataVisualization.Charting.Series "L-"; $sL.ChartType = 'Line'; $sL.Color = 'Red'; $sL.BorderDashStyle = 'Dash'; $sL.IsVisibleInLegend = $false; $chart.Series.Add($sL) | Out-Null
             
+            $res = $script:resistanceDict[$rep.Name]
             foreach ($v in 'U', 'V', 'W') {
-                $s = New-Object System.Windows.Forms.DataVisualization.Charting.Series "Voie $v"
+                $seriesName = "Voie $v"
+                if ($res -and $res.$v) {
+                    $seriesName += " ($($res.$v)Ω)"
+                }
+                
+                $s = New-Object System.Windows.Forms.DataVisualization.Charting.Series $seriesName
                 $s.ChartType = 'Line'; $s.BorderWidth = 2
                 $s.IsVisibleInLegend = $true
                 if ($v -eq 'U') { $s.Color = 'SteelBlue' }
