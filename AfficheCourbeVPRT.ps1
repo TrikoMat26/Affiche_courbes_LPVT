@@ -1107,26 +1107,65 @@ $btnNext.Add_Click({
         }
     })
 
-$dgvReports.Add_CellClick({
+$script:lastValidSelection = @()
+$script:disableChartUpdate = $false
+$script:isRestoringSelection = $false
+
+$dgvReports.Add_SelectionChanged({
+        if ($script:isRestoringSelection) { return }
+
+        if ($script:disableChartUpdate) {
+            $script:isRestoringSelection = $true
+            $dgvReports.ClearSelection()
+            foreach ($idx in $script:lastValidSelection) {
+                if ($idx -lt $dgvReports.Rows.Count) {
+                    $dgvReports.Rows[$idx].Selected = $true
+                }
+            }
+            $script:isRestoringSelection = $false
+        }
+        else {
+            $script:lastValidSelection = @()
+            foreach ($r in $dgvReports.SelectedRows) {
+                $script:lastValidSelection += $r.Index
+            }
+            & $UpdateCharts
+        }
+    })
+
+$dgvReports.Add_CellMouseDown({
         param($s, $e)
-        if ($e.RowIndex -ge 0 -and $dgvReports.Columns[$e.ColumnIndex].Name -eq "Resistances") {
-            $row = $dgvReports.Rows[$e.RowIndex]
-            $rName = $row.Cells["Rapport"].Value
-            $current = $script:resistanceDict[$rName]
-            if (-not $current) { $current = @{ U = ""; V = ""; W = "" } }
-            
-            $newVals = Show-ResistanceDialog -ReportName $rName -CurrentValues $current
-            if ($newVals) {
-                # Mettre à jour le dictionnaire et sauvegarder
-                $script:resistanceDict[$rName] = $newVals
-                Save-Resistances -Dict $script:resistanceDict
-                # Mettre à jour la cellule immédiatement
-                $row.Cells["Resistances"].Value = "U:$($newVals.U) V:$($newVals.V) W:$($newVals.W)"
+        if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left -and $e.RowIndex -ge 0 -and $e.ColumnIndex -ge 0) {
+            if ($dgvReports.Columns[$e.ColumnIndex].Name -eq "Resistances") {
+                $script:disableChartUpdate = $true
+            }
+            else {
+                $script:disableChartUpdate = $false
             }
         }
     })
 
-$dgvReports.Add_SelectionChanged({ & $UpdateCharts })
+$dgvReports.Add_CellClick({
+        param($s, $e)
+        if ($e.RowIndex -ge 0 -and $e.ColumnIndex -ge 0 -and $dgvReports.Columns[$e.ColumnIndex].Name -eq "Resistances") {
+            $row = $dgvReports.Rows[$e.RowIndex]
+            $rName = $row.Cells["Rapport"].Value
+            $current = $script:resistanceDict[$rName]
+            if (-not $current) { $current = @{ U = ""; V = ""; W = "" } }
+        
+            $newVals = Show-ResistanceDialog -ReportName $rName -CurrentValues $current
+        
+            $script:disableChartUpdate = $false
+        
+            if ($newVals) {
+                $script:resistanceDict[$rName] = $newVals
+                Save-Resistances -Dict $script:resistanceDict
+                $row.Cells["Resistances"].Value = "U:$($newVals.U) V:$($newVals.V) W:$($newVals.W)"
+            
+                & $UpdateCharts
+            }
+        }
+    })
 
 $cbDisplayMode.Add_SelectedIndexChanged({
         $cbVoie.Enabled = ($cbDisplayMode.SelectedIndex -eq 1)
