@@ -720,7 +720,11 @@ $UpdateCharts = {
     if ($cbDisplayMode.SelectedIndex -eq 1) {
         $voie = $cbVoie.SelectedItem
         $chart = New-BaseChart "Comparaison Voie $voie"
-        $chart.Height = 400
+        
+        $targetHeight = [math]::Floor(($panelCharts.ClientSize.Height - 20) / 2)
+        if ($targetHeight -lt 200) { $targetHeight = 200 }
+        
+        $chart.Height = $targetHeight
         $chart.Width = $panelCharts.ClientSize.Width - 30
         Set-FixedYAxis $chart.ChartAreas['main']
         
@@ -766,7 +770,11 @@ $UpdateCharts = {
         
         foreach ($rep in $reportsToShow) {
             $chart = New-BaseChart $rep.Name
-            $chart.Height = 300
+            
+            $targetHeight = [math]::Floor(($panelCharts.ClientSize.Height - 20) / 2)
+            if ($targetHeight -lt 200) { $targetHeight = 200 }
+            
+            $chart.Height = $targetHeight
             $chart.Width = $panelCharts.ClientSize.Width - 30
             Set-FixedYAxis $chart.ChartAreas['main']
             
@@ -1019,12 +1027,15 @@ $LoadAction = {
     # Update Trend
     & $UpdateTrend
     
-    # Sélectionner toutes les lignes par défaut
-    foreach ($row in $dgvReports.Rows) {
-        $row.Selected = $true
-    }
-    
+    # --- 
+    # Libérer le verrou de rafraîchissement des graphiques AVANT de sélectionner
+    # pour que SelectionChanged enregistre bien les nouvelles sélections !
     $script:disableChartUpdate = $false
+    
+    # Sélectionner toutes les lignes par défaut
+    $dgvReports.SelectAll()
+    
+    # Forcer la mise à jour (au cas où SelectAll() ne modifierait rien si 1 seule ligne déjà auto-sélectionnée)
     & $UpdateCharts
     
     $form.Cursor = [System.Windows.Forms.Cursors]::Default
@@ -1176,8 +1187,12 @@ $cbVoie.Add_SelectedIndexChanged({ & $UpdateCharts })
 
 # Resize Events
 $panelCharts.Add_SizeChanged({
+        $targetHeight = [math]::Floor(($panelCharts.ClientSize.Height - 20) / 2)
+        if ($targetHeight -lt 200) { $targetHeight = 200 }
+    
         foreach ($c in $panelCharts.Controls) {
             $c.Width = $panelCharts.ClientSize.Width - 30
+            $c.Height = $targetHeight
         }
     })
 
