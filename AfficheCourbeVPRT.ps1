@@ -223,6 +223,50 @@ function Save-Resistances {
     }
 }
 
+# --- Fonctions de gestion des marquages CMS ---
+$script:smdPath = Join-Path $PSScriptRoot "smd_markings.json"
+
+function Get-SMDMarkings {
+    if (Test-Path $script:smdPath) {
+        try {
+            $content = Get-Content $script:smdPath | Out-String
+            return ($content | ConvertFrom-Json | Sort-Object R)
+        }
+        catch {
+            Write-Warning "Erreur lors de la lecture du fichier de marquages CMS : $($_.Exception.Message)"
+        }
+    }
+    # Valeurs par défaut si le fichier n'existe pas ou est corrompu
+    return @(
+        @{ R = 221; M = "-" }
+        @{ R = 274; M = "-" }
+        @{ R = 332; M = "51A" }
+        @{ R = 383; M = "57A" }
+        @{ R = 432; M = "62A" }
+        @{ R = 475; M = "66A" }
+        @{ R = 536; M = "71A" }
+        @{ R = 576; M = "74A" }
+        @{ R = 634; M = "78A" }
+        @{ R = 681; M = "81A" }
+        @{ R = 845; M = "-" }
+        @{ R = 931; M = "-" }
+        @{ R = 1000; M = "-" }
+    )
+}
+
+function Save-SMDMarkings {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Data
+    )
+    try {
+        $Data | ConvertTo-Json -Depth 100 | Set-Content $script:smdPath -Force
+    }
+    catch {
+        [System.Windows.Forms.MessageBox]::Show("Erreur lors de la sauvegarde des marquages CMS : $($_.Exception.Message)", "Erreur de sauvegarde", 'OK', 'Error')
+    }
+}
+
 function Get-FileText {
     param([string]$Path)
     $encodings = @([System.Text.Encoding]::UTF8,
@@ -328,6 +372,8 @@ $script:reportCache = @()
 $script:reportColors = @{}
 $script:resistancePath = Join-Path $PSScriptRoot "resistances.json"
 $script:resistanceDict = Get-Resistances
+$script:smdPath = Join-Path $PSScriptRoot "smd_markings.json"
+$script:smdDict = Get-SMDMarkings
 
 # Liste fixe des 15 positions pour l'axe X
 $script:StandardPositions = @(
@@ -522,6 +568,22 @@ $nudLow.Minimum = -10
 $nudLow.Maximum = 10
 $nudLow.Value = -0.22
 $grpLimits.Controls.Add($nudLow)
+
+$pnlOptions = New-Object System.Windows.Forms.Panel
+$pnlOptions.Height = 40
+$pnlOptions.Dock = 'Top'
+$pnlOptions.Padding = New-Object System.Windows.Forms.Padding(10, 5, 10, 5)
+$panelLeft.Controls.Add($pnlOptions)
+$pnlOptions.BringToFront()
+
+$btnSMDMarking = New-Object System.Windows.Forms.Button
+$btnSMDMarking.Text = "🔗 Editer Codes CMS"
+$btnSMDMarking.Location = New-Object System.Drawing.Point(10, 5)
+$btnSMDMarking.Size = New-Object System.Drawing.Size(150, 30)
+$btnSMDMarking.Cursor = [System.Windows.Forms.Cursors]::Hand
+$btnSMDMarking.FlatStyle = 'Standard'
+$btnSMDMarking.Add_Click({ Show-SMDMarkingWindow })
+$pnlOptions.Controls.Add($btnSMDMarking)
 
 # Zone Liste (DataGridView)
 $dgvReports = New-Object System.Windows.Forms.DataGridView
@@ -904,7 +966,8 @@ function Show-ResistanceDialog {
     $lblInfo.Size = New-Object System.Drawing.Size(250, 20)
     $diag.Controls.Add($lblInfo)
 
-    $normValues = @(221, 274, 332, 383, 432, 475, 536, 576, 634, 681, 845, 931, 1000)
+    # Extraction des valeurs normalisées depuis smdDict (compatible hashtable et PSCustomObject)
+    $normValues = @($script:smdDict | ForEach-Object { $_.R } | Sort-Object)
 
     # U
     $lblU = New-Object System.Windows.Forms.Label
@@ -964,6 +1027,87 @@ function Show-ResistanceDialog {
         return @{ U = $cbU.SelectedItem; V = $cbV.SelectedItem; W = $cbW.SelectedItem }
     }
     return $null
+}
+
+function Show-SMDMarkingWindow {
+    $script:smdForm = New-Object System.Windows.Forms.Form
+    $script:smdForm.Text = "Marquage CMS des Résistances"
+    $script:smdForm.Size = New-Object System.Drawing.Size(350, 450)
+    $script:smdForm.StartPosition = 'CenterScreen'
+    $script:smdForm.FormBorderStyle = 'FixedDialog'
+    $script:smdForm.MaximizeBox = $false
+    $script:smdForm.MinimizeBox = $false
+    
+    $pnlBottom = New-Object System.Windows.Forms.Panel
+    $pnlBottom.Height = 40
+    $pnlBottom.Dock = 'Bottom'
+    $script:smdForm.Controls.Add($pnlBottom)
+    
+    $btnSave = New-Object System.Windows.Forms.Button
+    $btnSave.Text = "Enregistrer"
+    $btnSave.Location = New-Object System.Drawing.Point(120, 5)
+    $btnSave.Size = New-Object System.Drawing.Size(100, 30)
+    $pnlBottom.Controls.Add($btnSave)
+    
+    $script:smdDgv = New-Object System.Windows.Forms.DataGridView
+    $script:smdDgv.Dock = 'Fill'
+    $script:smdDgv.AllowUserToAddRows = $true
+    $script:smdDgv.AllowUserToDeleteRows = $true
+    $script:smdDgv.ReadOnly = $false
+    $script:smdDgv.RowHeadersVisible = $true
+    $script:smdDgv.AutoSizeColumnsMode = 'Fill'
+    $script:smdDgv.BackgroundColor = [System.Drawing.Color]::White
+    $script:smdDgv.SelectionMode = 'FullRowSelect'
+    
+    $col1 = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+    $col1.Name = "Resistance"
+    $col1.HeaderText = "Résistance (Ω)"
+    $col1.ValueType = [int]
+    $script:smdDgv.Columns.Add($col1) | Out-Null
+    
+    $col2 = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+    $col2.Name = "Marking"
+    $col2.HeaderText = "Marquage CMS (séparés par ,)"
+    $script:smdDgv.Columns.Add($col2) | Out-Null
+    
+    # Remplir avec les données actuelles
+    foreach ($item in $script:smdDict) {
+        $idx = $script:smdDgv.Rows.Add()
+        $script:smdDgv.Rows[$idx].Cells["Resistance"].Value = $item.R
+        $script:smdDgv.Rows[$idx].Cells["Marking"].Value = $item.M
+    }
+    
+    $script:smdForm.Controls.Add($script:smdDgv)
+    
+    # Événement de sauvegarde - utilise uniquement des variables $script: (pas de closure)
+    $btnSave.Add_Click({
+            $script:smdDgv.EndEdit()
+            $newData = @()
+            foreach ($row in $script:smdDgv.Rows) {
+                if (-not $row.IsNewRow -and $null -ne $row.Cells["Resistance"].Value) {
+                    $rVal = [int]$row.Cells["Resistance"].Value
+                    $mVal = $row.Cells["Marking"].Value
+                    if (-not $mVal) { $mVal = "-" }
+                    $newData += @{ "R" = $rVal; "M" = [string]$mVal }
+                }
+            }
+            $newData = @($newData | Sort-Object { $_.R })
+            if ($newData.Count -gt 0) {
+                $script:smdDict = $newData
+                try {
+                    $jsonStr = $newData | ConvertTo-Json -Depth 10
+                    [System.IO.File]::WriteAllText($script:smdPath, $jsonStr, [System.Text.Encoding]::UTF8)
+                }
+                catch {
+                    [System.Windows.Forms.MessageBox]::Show("Erreur lors de la sauvegarde : $_", "Erreur", 'OK', 'Error')
+                }
+            }
+            $script:smdForm.Close()
+        })
+    
+    # Rend la fenêtre "volante" pour ne pas la perdre derrière
+    $script:smdForm.TopMost = $true
+    $script:smdForm.Show() | Out-Null
 }
 
 $LoadAction = {
