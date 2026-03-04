@@ -761,6 +761,9 @@ $UpdateCharts = {
     } 
     # Mode Multi-Rapports
     else {
+        $prevRes = @{ U = $null; V = $null; W = $null }
+        $isFirstReport = $true
+        
         foreach ($rep in $reportsToShow) {
             $chart = New-BaseChart $rep.Name
             $chart.Height = 300
@@ -775,7 +778,13 @@ $UpdateCharts = {
             foreach ($v in 'U', 'V', 'W') {
                 $seriesName = "Voie $v"
                 if ($res -and $res.$v) {
-                    $seriesName += " ($($res.$v)Ω)"
+                    if (-not $isFirstReport -and $prevRes[$v] -ne $null -and $prevRes[$v] -ne $res.$v) {
+                        $seriesName += " ($($prevRes[$v]) -> $($res.$v)Ω)"
+                    }
+                    else {
+                        $seriesName += " ($($res.$v)Ω)"
+                    }
+                    $prevRes[$v] = $res.$v
                 }
                 
                 $s = New-Object System.Windows.Forms.DataVisualization.Charting.Series $seriesName
@@ -806,6 +815,7 @@ $UpdateCharts = {
             }
             
             $panelCharts.Controls.Add($chart)
+            $isFirstReport = $false
         }
     }
     
