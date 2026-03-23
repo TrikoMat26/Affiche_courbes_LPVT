@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param()
 
 # --- Configuration et Styles ---
@@ -817,10 +817,18 @@ $UpdateCharts = {
             $s.BorderWidth = 2
             $chart.Series.Add($s) | Out-Null
             
+            $validPoints = 0
             for ($i = 0; $i -lt $allPos.Count; $i++) {
                 $p = $rep.Data | Where-Object { $_.Position -eq $allPos[$i] -and $_.Voie -eq $voie } | Select-Object -First 1
-                if ($p) { $s.Points.AddXY($i + 1, $p.Precision) | Out-Null }
+                if ($p) { 
+                    $s.Points.AddXY($i + 1, $p.Precision) | Out-Null
+                    $validPoints++
+                }
                 else { $s.Points.AddXY($i + 1, [double]::NaN) | Out-Null }
+            }
+            if ($validPoints -eq 1) {
+                $s.MarkerStyle = 'Circle'
+                $s.MarkerSize = 6
             }
         }
         $panelCharts.Controls.Add($chart)
@@ -865,13 +873,19 @@ $UpdateCharts = {
                 else { $s.Color = 'ForestGreen' }
                 $chart.Series.Add($s) | Out-Null
                 
+                $validPoints = 0
                 for ($i = 0; $i -lt $allPos.Count; $i++) {
                     $pt = $rep.Data | Where-Object { $_.Position -eq $allPos[$i] -and $_.Voie -eq $v } | Select-Object -First 1
                     if ($pt) { 
                         $idx = $s.Points.AddXY($i + 1, $pt.Precision)
                         $s.Points[$idx].ToolTip = "$($allPos[$i]) : $($pt.Precision)%"
+                        $validPoints++
                     }
                     else { $s.Points.AddXY($i + 1, [double]::NaN) | Out-Null }
+                }
+                if ($validPoints -eq 1) {
+                    $s.MarkerStyle = 'Circle'
+                    $s.MarkerSize = 6
                 }
             }
             
