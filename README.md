@@ -12,6 +12,7 @@ Cet outil (script PowerShell `AfficheCourbeVPRT.ps1`) permet d'analyser, de visu
 ### 1. Suivi des valeurs de résistances (U, V, W)
 L'interface permet désormais de taguer chaque rapport de test avec les résistances (U, V, W) montées sur la carte lors de l'exécution du rapport.
 - **Saisie simplifiée** : En cliquant sur la colonne `Résistances (U,V,W)` du tableau de rapports, une fenêtre s'ouvre pour attribuer les valeurs pertinentes.
+- **Collage automatique depuis Excel (`📋 Coller (Excel)`)** : Un bouton permet de coller directement un bloc de 6 colonnes copiées depuis Excel (valeurs calculées et montées de R46, R47, R48). Seules les valeurs montées (2ᵉ, 4ᵉ et 6ᵉ colonnes) sont extraites et associées automatiquement aux voies U, V et W si elles correspondent aux séries normalisées.
 - **Persistance** : Ces résistances sont stockées dans le fichier `resistances.json` rattaché à chaque nom de rapport.
 - **Mise en évidence sur graphique** : Les modifications de résistances entre deux rapports consécutifs sont signalées lors du tracé sur les courbes.
 

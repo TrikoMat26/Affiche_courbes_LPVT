@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 # --- Configuration et Styles ---
@@ -967,7 +967,7 @@ function Show-ResistanceDialog {
     param([string]$ReportName, $CurrentValues)
     $diag = New-Object System.Windows.Forms.Form
     $diag.Text = "Saisie des résistances - $ReportName"
-    $diag.Size = New-Object System.Drawing.Size(300, 240)
+    $diag.Size = New-Object System.Drawing.Size(300, 270)
     $diag.StartPosition = 'CenterParent'
     $diag.FormBorderStyle = 'FixedDialog'
     $diag.MaximizeBox = $false
@@ -981,7 +981,7 @@ function Show-ResistanceDialog {
     $diag.Controls.Add($lblInfo)
 
     # Extraction des valeurs normalisées depuis smdDict (compatible hashtable et PSCustomObject)
-    $normValues = @($script:smdDict | ForEach-Object { $_.R } | Sort-Object)
+    $normValues = @($script:smdDict | ForEach-Object { [int]$_.R } | Sort-Object -Unique)
 
     # U
     $lblU = New-Object System.Windows.Forms.Label
@@ -1022,16 +1022,73 @@ function Show-ResistanceDialog {
     if ($CurrentValues.W -in $normValues) { $cbW.SelectedItem = [int]$CurrentValues.W }
     $diag.Controls.Add($cbW)
 
+    # Bouton Coller Excel (6 colonnes: R46 calc, R46 montée, R47 calc, R47 montée, R48 calc, R48 montée)
+    $btnPaste = New-Object System.Windows.Forms.Button
+    $btnPaste.Text = "📋 Coller (Excel)"
+    $btnPaste.Location = New-Object System.Drawing.Point(30, 148)
+    $btnPaste.Size = New-Object System.Drawing.Size(225, 28)
+    $btnPaste.Add_Click({
+        try {
+            $clipText = [System.Windows.Forms.Clipboard]::GetText()
+            if ([string]::IsNullOrWhiteSpace($clipText)) {
+                [System.Windows.Forms.MessageBox]::Show("Le presse-papier est vide.", "Coller Excel", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+                return
+            }
+
+            # Découpage par tabulations, espaces, sauts de ligne
+            $tokens = $clipText -split '[\t\s\r\n]+' | Where-Object { $_ -ne '' }
+            if ($tokens.Count -lt 6) {
+                [System.Windows.Forms.MessageBox]::Show("Le presse-papier doit contenir 6 valeurs correspondant aux colonnes Excel.`nTrouvé : $($tokens.Count) valeur(s).", "Coller Excel", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+                return
+            }
+
+            # Extrait les 2ème, 4ème et 6ème valeurs (index 1, 3, 5 -> Résistances montées R46, R47, R48)
+            $valUStr = $tokens[1]
+            $valVStr = $tokens[3]
+            $valWStr = $tokens[5]
+
+            # Voie U (R46 montée)
+            $valU = 0
+            if ([int]::TryParse($valUStr, [ref]$valU) -and ($valU -in $normValues)) {
+                $cbU.SelectedItem = [int]$valU
+            } else {
+                $cbU.SelectedIndex = -1
+            }
+
+            # Voie V (R47 montée)
+            $valV = 0
+            if ([int]::TryParse($valVStr, [ref]$valV) -and ($valV -in $normValues)) {
+                $cbV.SelectedItem = [int]$valV
+            } else {
+                $cbV.SelectedIndex = -1
+            }
+
+            # Voie W (R48 montée)
+            $valW = 0
+            if ([int]::TryParse($valWStr, [ref]$valW) -and ($valW -in $normValues)) {
+                $cbW.SelectedItem = [int]$valW
+            } else {
+                $cbW.SelectedIndex = -1
+            }
+        }
+        catch {
+            [System.Windows.Forms.MessageBox]::Show("Erreur lors de la lecture du presse-papier : $_", "Erreur", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+    })
+    $diag.Controls.Add($btnPaste)
+
     $btnOk = New-Object System.Windows.Forms.Button
     $btnOk.Text = "Valider"
     $btnOk.DialogResult = [System.Windows.Forms.DialogResult]::OK
-    $btnOk.Location = New-Object System.Drawing.Point(50, 160)
+    $btnOk.Location = New-Object System.Drawing.Point(45, 190)
+    $btnOk.Size = New-Object System.Drawing.Size(90, 28)
     $diag.Controls.Add($btnOk)
 
     $btnCancel = New-Object System.Windows.Forms.Button
     $btnCancel.Text = "Annuler"
     $btnCancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-    $btnCancel.Location = New-Object System.Drawing.Point(150, 160)
+    $btnCancel.Location = New-Object System.Drawing.Point(150, 190)
+    $btnCancel.Size = New-Object System.Drawing.Size(90, 28)
     $diag.Controls.Add($btnCancel)
 
     $diag.AcceptButton = $btnOk
